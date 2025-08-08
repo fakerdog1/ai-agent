@@ -3,7 +3,19 @@ import sys
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from functions.get_files_info import schema_get_files_info, available_functions
+from functions.get_files_info import schema_get_files_info, get_files_info
+from functions.get_files_contents import schema_get_file_content, get_file_content
+from functions.write_file import schema_write_file, write_file
+from functions.run_python import schema_run_file, run_python_file
+
+available_functions = types.Tool(
+    function_declarations=[
+        schema_get_files_info,
+        schema_get_file_content,
+        schema_write_file,
+        schema_run_file,
+    ]
+)
 
 system_prompt = """
 You are a helpful AI coding agent.
@@ -11,6 +23,9 @@ You are a helpful AI coding agent.
 When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
 
 - List files and directories
+- Read file contents
+- Execute Python files with optional arguments
+- Write or overwrite files
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
@@ -43,7 +58,49 @@ def print_verbose(optional_arguments = []):
                 print_verbose = True
 
     return print_verbose
-                
+
+def call_function(function_call, verbose=False):
+    try:
+        func = function_call.name
+        arguments = function_call.args
+        arguments['working_directory'] = './calculator'
+
+        if (verbose):
+            print(f"Calling function: {function_call.name}({function_call.args})")
+        else:
+            print(f" - Calling function: {function_call.name}")
+
+        mappedFuncs = {
+            "get_files_info": get_files_info,
+            "get_file_content": get_file_content,
+            "write_file": write_file,
+            "run_python_file": run_python_file,
+        }
+
+        result = mappedFuncs[func](**arguments)
+
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=func,
+                    response={"result": result},
+                )
+            ],
+        )
+
+    except:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=func,
+                    response={"error": f"Unknown function: {func}"},
+                )
+            ],
+        )
+
+        
 
 user_prompt, optional_arguments = get_user_args()
 
@@ -56,26 +113,25 @@ res = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
     config=types.GenerateContentConfig(
-        tools=[available_functions], system_instruction=system_prompt
+        tools=[
+            available_functions
+        ], system_instruction=system_prompt
     ),
 )
 
-text = res.text
 f_calls = res.function_calls
 if f_calls:
     for call in f_calls:
-        print(f"Calling function: {call.name}({call.args})")
-print(text)
-
-if print_verbose(optional_arguments):
-    prompt_tokens = res.usage_metadata.prompt_token_count
-    res_tokens = res.usage_metadata.candidates_token_count
-    print(f"User prompt: {user_prompt}")
-    print(f"Prompt tokens: {prompt_tokens}")
-    print(f"Response tokens: {res_tokens}")
+        called = call_function(call, print_verbose)
+        try: 
+            function_call_result = called.parts[0].function_response.response
+            if print_verbose:
+                print(f"-> {function_call_result}")
+        except:
+            raise Exception("No response from the function")
 
 def main():
-    pass
+    print("Hello world")
 
 if __name__ == "__main__":
     main()

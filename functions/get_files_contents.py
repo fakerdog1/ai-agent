@@ -1,6 +1,21 @@
 import os
 from functions.get_files_info import get_abs_path, path_contains, join_paths
 import config
+from google.genai import types
+
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Reads a file's content up to 10000 characters, constrained to the working directory, file must exist.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path of the file to be read, relative to the working directory. If not provided, returns and error for non-existing file.",
+            ),
+        },
+    ),
+)
 
 def get_file_content(working_directory, file_path):
     try:
