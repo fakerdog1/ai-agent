@@ -103,32 +103,52 @@ def call_function(function_call, verbose=False):
         
 
 user_prompt, optional_arguments = get_user_args()
-
 messages = [
     types.Content(role="user", parts=[types.Part(text=user_prompt)]),
 ]
 
 client = init_client()
-res = client.models.generate_content(
-    model="gemini-2.0-flash-001",
-    contents=messages,
-    config=types.GenerateContentConfig(
-        tools=[
-            available_functions
-        ], system_instruction=system_prompt
-    ),
-)
 
-f_calls = res.function_calls
-if f_calls:
-    for call in f_calls:
-        called = call_function(call, print_verbose)
-        try: 
-            function_call_result = called.parts[0].function_response.response
-            if print_verbose:
-                print(f"-> {function_call_result}")
-        except:
-            raise Exception("No response from the function")
+for i in range(0, 21):
+    try:
+        res = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=messages,
+            config=types.GenerateContentConfig(
+                tools=[
+                    available_functions
+                ], system_instruction=system_prompt
+            ),
+        )
+        has_function_calls = any(
+            any(part.function_call for part in candidate.content.parts)
+            for candidate in res.candidates
+        )
+
+        if not has_function_calls:
+            print(res.text)
+            break
+
+        candidates = res.candidates
+        for candidate in candidates:
+            messages.append(candidate.content)
+
+        f_calls = res.function_calls
+        if f_calls:
+            for call in f_calls:
+                called = call_function(call, print_verbose)
+                try: 
+                    function_call_result = called.parts[0].function_response.response
+                    messages.append(called)
+                    if print_verbose:
+                        print(f"-> {function_call_result}")
+                except:
+                    raise Exception("No response from the function")
+                
+    except Exception as e:
+        raise Exception(e)
+    
+    i += 1
 
 def main():
     print("Hello world")

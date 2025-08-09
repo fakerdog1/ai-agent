@@ -24,6 +24,14 @@ class TestCalculator(unittest.TestCase):
         result = self.calculator.evaluate("10 / 2")
         self.assertEqual(result, 5)
 
+    def test_division_by_zero(self):
+        with self.assertRaises(ValueError):
+            self.calculator.evaluate("10 / 0")
+
+    def test_division_with_negative_numbers(self):
+        result = self.calculator.evaluate("-10 / -2")
+        self.assertEqual(result, 5)
+
     def test_nested_expression(self):
         result = self.calculator.evaluate("3 * 4 + 5")
         self.assertEqual(result, 17)
